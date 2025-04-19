@@ -99,7 +99,7 @@ ui <- fluidPage(
         inputId = "titles",
         label   = "Movie Titles (one per line):",
         rows    = 5,
-        placeholder = "e.g. Stirb langsam 3"
+        placeholder = "Bsp. Stirb langsam: Jetzt erst recht"
       ),
       actionButton(inputId = "go", label = "Predict Fit")
     ),
