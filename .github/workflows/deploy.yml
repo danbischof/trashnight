@@ -62,5 +62,6 @@ jobs:
               appName       = Sys.getenv("SHINYAPPS_NAME"),
               account       = Sys.getenv("SHINYAPPS_ACCOUNT"),
               appDir        = ".",
-              appPrimaryDoc = "app.R"
+              appPrimaryDoc = "app.R",
+              forceUpdate   = TRUE
             )'
