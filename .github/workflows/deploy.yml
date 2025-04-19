@@ -6,30 +6,33 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest           # host OS doesn’t matter, we’ll use the container
+    container:
+      image: rocker/r-ver:4.4.4      # use R 4.4.4 directly
 
     steps:
-      # 1. Check out your code
+      # 1. Checkout your code
       - uses: actions/checkout@v3
 
-      # 2. Install R 4.4.4
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: 4.4.4
+      # 2. Install system deps (if needed for packages)
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y libxml2-dev libssl-dev libcurl4-openssl-dev
 
-      # 3. Install dependencies
+      # 3. Install R packages
       - name: Install R packages
         run: |
           Rscript -e 'install.packages(c(
             "rsconnect","shiny","httr","jsonlite",
             "dplyr","text2vec","glmnet","stringdist"
-          ))'
+          ), repos="https://cloud.r-project.org")'
 
       # 4. Deploy to shinyapps.io
       - name: Deploy to shinyapps.io
         env:
-          SHINYAPPS_NAME: ${{ secrets.SHINYAPPS_NAME }}
-          SHINYAPPS_TOKEN: ${{ secrets.SHINYAPPS_TOKEN }}
+          SHINYAPPS_NAME:   ${{ secrets.SHINYAPPS_NAME }}
+          SHINYAPPS_TOKEN:  ${{ secrets.SHINYAPPS_TOKEN }}
           SHINYAPPS_SECRET: ${{ secrets.SHINYAPPS_SECRET }}
         run: |
           Rscript -e '
