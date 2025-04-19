@@ -121,84 +121,100 @@ vocab       <- create_vocabulary(it_train) %>% prune_vocabulary(term_count_min =
 vectorizer  <- vocab_vectorizer(vocab)
 dtm_train   <- create_dtm(it_train, vectorizer)
 tfidf_model <- TfIdf$new()
-X_text_train <- as.matrix(fit_transform(dtm_train, tfidf_model))
-# ensure at least two dimensions
-if (ncol(X_text_train) == 0) {
-  X_text_train <- matrix(0, nrow = nrow(X_text_train), ncol = 1)
+# fit TF–IDF embeddings; may be dgCMatrix or simple
+raw_text   <- fit_transform(dtm_train, tfidf_model)
+if (inherits(raw_text, "dgCMatrix")) {
+  if (ncol(raw_text) == 0) {
+    X_text_train <- matrix(0, nrow = nrow(raw_text), ncol = 1)
+    colnames(X_text_train) <- "empty"
+  } else {
+    X_text_train <- as.matrix(raw_text)
+  }
+} else {
+  X_text_train <- matrix(0, nrow = length(train_titles), ncol = 1)
   colnames(X_text_train) <- "empty"
 }
+# precompute norms safely
 train_norms <- sqrt(rowSums(X_text_train ^ 2))
 
-# 5) UI with German labels for weights
+# 5) UI with German slider labels
 ui <- fluidPage(
   titlePanel("Trash Night Fit Predictor"),
   sidebarLayout(
     sidebarPanel(
       textInput("movie", "Movie Title:"),
-      actionButton("go", "Predict"),
-      sliderInput("w_text", "Gewichtung: Beschreibung", min = 0, max = 1, value = 0.4, step = 0.1),
-      sliderInput("w_score", "Gewichtung: Bewertung", min = 0, max = 1, value = 0.2, step = 0.1),
-      sliderInput("w_rec", "Gewichtung: Vorschläge für ähnliche Filme", min = 0, max = 1, value = 0.2, step = 0.1),
-      sliderInput("w_gen", "Gewichtung: Genre", min = 0, max = 1, value = 0.2, step = 0.1)
+      actionButton("go",   "Predict"),
+      sliderInput("w_text",  "Gewichtung: Beschreibung",
+                  min = 0, max = 1, value = 0.4, step = 0.1),
+      sliderInput("w_score", "Gewichtung: Bewertung",
+                  min = 0, max = 1, value = 0.2, step = 0.1),
+      sliderInput("w_rec",   "Gewichtung: Vorschläge für ähnliche Filme",
+                  min = 0, max = 1, value = 0.2, step = 0.1),
+      sliderInput("w_gen",   "Gewichtung: Genre",
+                  min = 0, max = 1, value = 0.2, step = 0.1)
     ),
-    mainPanel(tableOutput("result"))
+    mainPanel(
+      tableOutput("result")
+    )
   )
 )
 
-# 6) Server: compute similarity-based fits and blend
-server <- function(input, output) {
-  output$result <- renderTable({
-    req(input$go)
-    info <- get_info(input$movie, tmdb_api_key)
-    if (is.null(info)) {
-      return(data.frame(title = input$movie, predicted_fit = NA_real_, stringsAsFactors = FALSE))
-    }
-    # Text similarity
-    txt_new <- paste(info$overview, info$review1, sep = " ")
-    it_new  <- itoken(txt_new, preprocessor = tolower, tokenizer = word_tokenizer, progressbar = FALSE)
-    dtm_new <- create_dtm(it_new, vectorizer)
-    x_new   <- tfidf_model$transform(dtm_new)
-    new_norm<- sqrt(sum(x_new^2))
-    numer   <- as.numeric((X_text_train %*% t(x_new)))
-    denom   <- train_norms * new_norm
-    sims    <- numer / denom
-    sims[is.na(sims)] <- 0
-    text_fit <- if (sum(sims) > 0) sum(sims * train_ratings) / sum(sims) else mean(train_ratings)
-    
-    # Numeric score mapping
-    score   <- info$user_score
-    num_fit <- if (!is.na(score)) { f <- 3 - 2 * (score / 10); pmin(pmax(f, 1), 3) } else mean(train_ratings)
-    
-    # Rec scores mapping
-    recs    <- info$rec_scores
-    rec_fit <- if (length(recs) > 0) {
-      fits <- 3 - 2 * (recs / 10)
-      mean(fits, na.rm = TRUE)
-    } else mean(train_ratings)
-    
-    # Genre Jaccard similarity
-    new_genres <- info$genres
-    jacc      <- sapply(train_genres, function(g) {
-      u <- unique(c(g, new_genres)); if (length(u) == 0) return(0);
-      length(intersect(g, new_genres)) / length(u)
-    })
-    genre_fit <- if (sum(jacc) > 0) sum(jacc * train_ratings) / sum(jacc) else mean(train_ratings)
-    
-    # Blend with German labels weights
-    ws      <- c(input$w_text, input$w_score, input$w_rec, input$w_gen)
-    names(ws)<- c("text","score","rec","genre")
-    if (sum(ws) == 0) ws <- rep(1,4)
-    pred    <- (ws["text"] * text_fit +
-                  ws["score"] * num_fit +
-                  ws["rec"]   * rec_fit +
-                  ws["genre"] * genre_fit) / sum(ws)
-    
-    data.frame(
-      title = input$movie,
-      predicted_fit = round(pred, 2),
-      stringsAsFactors = FALSE
-    )
-  })
-}
 
-shinyApp(ui, server)
+                 # 6) Server: compute similarity-based fits and blend
+                 server <- function(input, output) {
+                   output$result <- renderTable({
+                     req(input$go)
+                     info <- get_info(input$movie, tmdb_api_key)
+                     if (is.null(info)) {
+                       return(data.frame(title = input$movie, predicted_fit = NA_real_, stringsAsFactors = FALSE))
+                     }
+                     # Text similarity
+                     txt_new <- paste(info$overview, info$review1, sep = " ")
+                     it_new  <- itoken(txt_new, preprocessor = tolower, tokenizer = word_tokenizer, progressbar = FALSE)
+                     dtm_new <- create_dtm(it_new, vectorizer)
+                     x_new   <- tfidf_model$transform(dtm_new)
+                     new_norm<- sqrt(sum(x_new^2))
+                     numer   <- as.numeric((X_text_train %*% t(x_new)))
+                     denom   <- train_norms * new_norm
+                     sims    <- numer / denom
+                     sims[is.na(sims)] <- 0
+                     text_fit <- if (sum(sims) > 0) sum(sims * train_ratings) / sum(sims) else mean(train_ratings)
+                     
+                     # Numeric score mapping
+                     score   <- info$user_score
+                     num_fit <- if (!is.na(score)) { f <- 3 - 2 * (score / 10); pmin(pmax(f, 1), 3) } else mean(train_ratings)
+                     
+                     # Rec scores mapping
+                     recs    <- info$rec_scores
+                     rec_fit <- if (length(recs) > 0) {
+                       fits <- 3 - 2 * (recs / 10)
+                       mean(fits, na.rm = TRUE)
+                     } else mean(train_ratings)
+                     
+                     # Genre Jaccard similarity
+                     new_genres <- info$genres
+                     jacc      <- sapply(train_genres, function(g) {
+                       u <- unique(c(g, new_genres)); if (length(u) == 0) return(0);
+                       length(intersect(g, new_genres)) / length(u)
+                     })
+                     genre_fit <- if (sum(jacc) > 0) sum(jacc * train_ratings) / sum(jacc) else mean(train_ratings)
+                     
+                     # Blend with German labels weights
+                     ws      <- c(input$w_text, input$w_score, input$w_rec, input$w_gen)
+                     names(ws)<- c("text","score","rec","genre")
+                     if (sum(ws) == 0) ws <- rep(1,4)
+                     pred    <- (ws["text"] * text_fit +
+                                   ws["score"] * num_fit +
+                                   ws["rec"]   * rec_fit +
+                                   ws["genre"] * genre_fit) / sum(ws)
+                     
+                     data.frame(
+                       title = input$movie,
+                       predicted_fit = round(pred, 2),
+                       stringsAsFactors = FALSE
+                     )
+                   })
+                 }
+                 
+                 shinyApp(ui, server)
+                 
