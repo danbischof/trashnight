@@ -51,6 +51,7 @@ jobs:
           SHINYAPPS_NAME:    ${{ secrets.SHINYAPPS_NAME }}
           SHINYAPPS_TOKEN:   ${{ secrets.SHINYAPPS_TOKEN }}
           SHINYAPPS_SECRET:  ${{ secrets.SHINYAPPS_SECRET }}
+          TMDB_API_KEY:      ${{ secrets.TMDB_API_KEY }}
         run: |
           Rscript -e '
             rsconnect::setAccountInfo(
