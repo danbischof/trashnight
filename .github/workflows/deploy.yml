@@ -17,17 +17,33 @@ jobs:
         with:
           r-version: 4.4
 
+      - name: Cache R library
+        uses: actions/cache@v3
+        with:
+          # adjust this path to where your R packages are installed in CI
+          path: ~/.R/library
+          key: ${{ runner.os }}-r-${{ hashFiles('**/renv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-r-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libxml2-dev libssl-dev libcurl4-openssl-dev
 
-      - name: Install R packages
+      - name: Restore R packages (or install missing)
+        # If you have an renv.lock, use renv::restore(); otherwise install as before
         run: |
-          Rscript -e 'install.packages(c(
-            "rsconnect","shiny","httr","jsonlite",
-            "dplyr","text2vec","glmnet","stringdist"
-          ), repos="https://cloud.r-project.org")'
+          Rscript -e '
+            if (file.exists("renv.lock")) {
+              install.packages("renv", repos="https://cloud.r-project.org")
+              renv::restore()
+            } else {
+              install.packages(c(
+                "rsconnect","shiny","httr","jsonlite",
+                "dplyr","text2vec","glmnet","stringdist"
+              ), repos="https://cloud.r-project.org")
+            }'
 
       - name: Deploy to shinyapps.io
         env:
