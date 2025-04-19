@@ -20,7 +20,6 @@ jobs:
       - name: Cache R library
         uses: actions/cache@v3
         with:
-          # adjust this path to where your R packages are installed in CI
           path: ~/.R/library
           key: ${{ runner.os }}-r-${{ hashFiles('**/renv.lock') }}
           restore-keys: |
@@ -32,7 +31,6 @@ jobs:
           sudo apt-get install -y libxml2-dev libssl-dev libcurl4-openssl-dev
 
       - name: Restore R packages (or install missing)
-        # If you have an renv.lock, use renv::restore(); otherwise install as before
         run: |
           Rscript -e '
             if (file.exists("renv.lock")) {
@@ -47,18 +45,20 @@ jobs:
 
       - name: Deploy to shinyapps.io
         env:
-          SHINYAPPS_NAME:   ${{ secrets.SHINYAPPS_NAME }}
-          SHINYAPPS_TOKEN:  ${{ secrets.SHINYAPPS_TOKEN }}
-          SHINYAPPS_SECRET: ${{ secrets.SHINYAPPS_SECRET }}
+          SHINYAPPS_ACCOUNT: ${{ secrets.SHINYAPPS_ACCOUNT }}  # your shinyapps.io username
+          SHINYAPPS_NAME:    ${{ secrets.SHINYAPPS_NAME }}     # your app name
+          SHINYAPPS_TOKEN:   ${{ secrets.SHINYAPPS_TOKEN }}
+          SHINYAPPS_SECRET:  ${{ secrets.SHINYAPPS_SECRET }}
         run: |
           Rscript -e '
             rsconnect::setAccountInfo(
-              name   = Sys.getenv("SHINYAPPS_NAME"),
+              name   = Sys.getenv("SHINYAPPS_ACCOUNT"),
               token  = Sys.getenv("SHINYAPPS_TOKEN"),
               secret = Sys.getenv("SHINYAPPS_SECRET")
             );
             rsconnect::deployApp(
               appName       = Sys.getenv("SHINYAPPS_NAME"),
+              account       = Sys.getenv("SHINYAPPS_ACCOUNT"),
               appDir        = ".",
               appPrimaryDoc = "app.R"
             )'
