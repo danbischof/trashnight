@@ -59,9 +59,8 @@ jobs:
               secret = Sys.getenv("SHINYAPPS_SECRET")
             );
             rsconnect::deployApp(
-              appName       = Sys.getenv("SHINYAPPS_NAME"),
-              account       = Sys.getenv("SHINYAPPS_ACCOUNT"),
-              appDir        = ".",
-              appPrimaryDoc = "app.R",
-              forceUpdate   = TRUE
+              account     = Sys.getenv("SHINYAPPS_ACCOUNT"),
+              appName     = Sys.getenv("SHINYAPPS_NAME"),
+              appDir      = ".",
+              forceUpdate = TRUE
             )'
