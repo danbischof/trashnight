@@ -8,7 +8,7 @@ library(text2vec)
 library(dplyr)
 
 # ← Insert your TMDb API key here ↓
-tmdb_api_key <- "9d297056af68910628b79746ed1f9f86"
+tmdb_api_key <- Sys.getenv("9d297056af68910628b79746ed1f9f86")  # expects TMDB_API_KEY set in environment
 
 # 1) Training data (titles + your fit ratings)
 train_titles  <- c(
@@ -137,29 +137,23 @@ if (inherits(raw_text, "dgCMatrix")) {
 # precompute norms safely
 train_norms <- sqrt(rowSums(X_text_train ^ 2))
 
-# 5) UI with German slider labels
-ui <- fluidPage(
-  titlePanel("Trash Night Fit Predictor"),
-  sidebarLayout(
-    sidebarPanel(
-      textInput("movie", "Movie Title:"),
-      actionButton("go",   "Predict"),
-      sliderInput("w_text",  "Gewichtung: Beschreibung",
-                  min = 0, max = 1, value = 0.4, step = 0.1),
-      sliderInput("w_score", "Gewichtung: Bewertung",
-                  min = 0, max = 1, value = 0.2, step = 0.1),
-      sliderInput("w_rec",   "Gewichtung: Vorschläge für ähnliche Filme",
-                  min = 0, max = 1, value = 0.2, step = 0.1),
-      sliderInput("w_gen",   "Gewichtung: Genre",
-                  min = 0, max = 1, value = 0.2, step = 0.1)
-    ),
-    mainPanel(
-      tableOutput("result")
-    )
-  )
-)
-
-
+# 5) UI
+ui <- fluidPage( with German labels for weights
+                 ui <- fluidPage(
+                   titlePanel("Trash Night Fit Predictor"),
+                   sidebarLayout(
+                     sidebarPanel(
+                       textInput("movie", "Movie Title:"),
+                       actionButton("go", "Predict"),
+                       sliderInput("w_text", "Gewichtung: Beschreibung", min = 0, max = 1, value = 0.4, step = 0.1),
+                       sliderInput("w_score", "Gewichtung: Bewertung", min = 0, max = 1, value = 0.2, step = 0.1),
+                       sliderInput("w_rec", "Gewichtung: Vorschläge für ähnliche Filme", min = 0, max = 1, value = 0.2, step = 0.1),
+                       sliderInput("w_gen", "Gewichtung: Genre", min = 0, max = 1, value = 0.2, step = 0.1)
+                     ),
+                     mainPanel(tableOutput("result"))
+                   )
+                 )
+                 
                  # 6) Server: compute similarity-based fits and blend
                  server <- function(input, output) {
                    output$result <- renderTable({
@@ -173,6 +167,8 @@ ui <- fluidPage(
                      it_new  <- itoken(txt_new, preprocessor = tolower, tokenizer = word_tokenizer, progressbar = FALSE)
                      dtm_new <- create_dtm(it_new, vectorizer)
                      x_new   <- tfidf_model$transform(dtm_new)
+                     # ensure x_new is a matrix
+                     x_new   <- as.matrix(x_new)
                      new_norm<- sqrt(sum(x_new^2))
                      numer   <- as.numeric((X_text_train %*% t(x_new)))
                      denom   <- train_norms * new_norm
