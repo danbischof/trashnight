@@ -30,18 +30,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxml2-dev libssl-dev libcurl4-openssl-dev
 
-      - name: Restore R packages (or install missing)
-        run: |
-          Rscript -e '
-            if (file.exists("renv.lock")) {
-              install.packages("renv", repos="https://cloud.r-project.org")
-              renv::restore()
-            } else {
-              install.packages(c(
-                "rsconnect","shiny","httr","jsonlite",
-                "dplyr","text2vec","glmnet","stringdist"
-              ), repos="https://cloud.r-project.org")
-            }'
+  - name: Restore R packages (or install missing)
+    # point to RStudio Public Package Manager for binaries
+    env:
+      RENV_CONFIG_REPOS_OVERRIDE: https://packagemanager.rstudio.com/all/latest
+    run: |
+      Rscript -e '
+        options(repos = c(CRAN = Sys.getenv("RENV_CONFIG_REPOS_OVERRIDE")));
+        if (file.exists("renv.lock")) {
+          install.packages("renv")      # binary from RSPM
+          renv::restore()
+        } else {
+          install.packages(c(
+            "rsconnect","shiny","httr","jsonlite",
+            "dplyr","text2vec","glmnet","stringdist"
+          ))
+        }'
+
 
       - name: Deploy to shinyapps.io
         env:
