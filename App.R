@@ -121,7 +121,12 @@ vocab       <- create_vocabulary(it_train) %>% prune_vocabulary(term_count_min =
 vectorizer  <- vocab_vectorizer(vocab)
 dtm_train   <- create_dtm(it_train, vectorizer)
 tfidf_model <- TfIdf$new()
-X_text_train<- fit_transform(dtm_train, tfidf_model)
+X_text_train <- as.matrix(fit_transform(dtm_train, tfidf_model))
+# ensure at least two dimensions
+if (ncol(X_text_train) == 0) {
+  X_text_train <- matrix(0, nrow = nrow(X_text_train), ncol = 1)
+  colnames(X_text_train) <- "empty"
+}
 train_norms <- sqrt(rowSums(X_text_train ^ 2))
 
 # 5) UI with German labels for weights
