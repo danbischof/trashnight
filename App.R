@@ -10,7 +10,7 @@ library(dplyr)
 `%||%` <- function(a, b) if (!is.null(a)) a else b
 
 # ← your TMDb key ↓
-tmdb_api_key <- Sys.getenv("TMDB_API_KEY")
+tmdb_api_key <- "9d297056af68910628b79746ed1f9f86"
 
 # 1) Training titles + your 1–3 ratings
 train_titles  <- c(
