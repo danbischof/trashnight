@@ -86,7 +86,14 @@ vectorizer    <- vocab_vectorizer(vocab)
 dtm_train     <- create_dtm(it_train, vectorizer)
 tfidf_model   <- TfIdf$new()
 X_text_train  <- fit_transform(dtm_train, tfidf_model)
-train_norms   <- sqrt(rowSums(X_text_train^2))
+
+# SAFE norms calculation
+if (is.matrix(X_text_train) && ncol(X_text_train) > 0) {
+  train_norms <- sqrt(rowSums(X_text_train^2))
+} else {
+  # no text features? fallback to zeros so text similarity becomes 0
+  train_norms <- rep(0, length(train_titles))
+}
 
 # 5) UI with your weight sliders
 ui <- fluidPage(
