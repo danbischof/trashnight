@@ -45,6 +45,11 @@ jobs:
               ))
             }'
 
+    - name: Show files
+      run: |
+        ls -lR .
+          sed -n '1,20p' app.R
+
       - name: Deploy to shinyapps.io
         env:
           SHINYAPPS_ACCOUNT: ${{ secrets.SHINYAPPS_ACCOUNT }}
