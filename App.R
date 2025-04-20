@@ -19,10 +19,11 @@ train_titles  <- c(
   "Der Eisbär",
   "Honey, I Shrunk the Kids",
   "Magic Mike",
-  "Anaconda",
-  "König der Herzen"
+  "9360-anaconda",
+  "König der Herzen",
+  "Titanic"
 )
-train_ratings <- c(1, 3, 2, 3, 3, 2, 2)
+train_ratings <- c(1, 3, 2, 3, 3, 2, 2, 3)
 
 # 3) Fetch features for one movie
 get_info <- function(title, api_key) {
@@ -86,7 +87,7 @@ train_norms <- if (is.matrix(X_text_train) && ncol(X_text_train)>0) {
 } else rep(0, length(train_titles))
 
 # 5) UI
-i_ui <- fluidPage(
+ui <- fluidPage(
   titlePanel("Trash Night Fit Predictor"),
   sidebarLayout(
     sidebarPanel(
@@ -101,55 +102,63 @@ i_ui <- fluidPage(
   )
 )
 
-# 6) Server
+# 6) Server: compute fits + blend
 server <- function(input, output) {
   output$result <- renderTable({
     req(input$go)
     info <- get_info(input$movie, tmdb_api_key)
     if (is.null(info)) return(data.frame(title=input$movie, predicted_fit=NA_real_))
     
-    # Text similarity
+    # Text similarity via cosine
     txt_new <- paste(info$overview, info$review1, sep=" ")
     it_new  <- itoken(txt_new, tolower, word_tokenizer, progressbar=FALSE)
     dtm_new <- create_dtm(it_new, vectorizer)
-    # convert to numeric vector
-    x_new_vec <- as.numeric(tfidf_model$transform(dtm_new))
-    # column vector
-    x_col     <- matrix(x_new_vec, ncol=1)
-    new_norm  <- sqrt(sum(x_col^2))
-    # ensure training matrix
-    X_base    <- as.matrix(X_text_train)
-    numer     <- as.numeric(X_base %*% x_col)
-    denom     <- train_norms * new_norm
-    sims      <- ifelse(denom>0, numer/denom, 0)
-    text_fit  <- if (sum(sims)>0) sum(sims * train_ratings)/sum(sims) else mean(train_ratings)
+    # full 1 x vocab_size matrix
+    x_new_mat <- tfidf_model$transform(dtm_new)
+    if (is.null(dim(x_new_mat))) {
+      x_new_mat <- matrix(x_new_mat, nrow = 1)
+    }
+    # ensure training matrix is base matrix
+    X_base <- as.matrix(X_text_train)
+    # numerator: (7 x M) %*% (M x 1) => 7 x 1
+    numer <- X_base %*% t(x_new_mat)
+    new_norm <- sqrt(sum(x_new_mat^2))
+    denom    <- train_norms * new_norm
+    sims     <- ifelse(denom > 0, numer[,1] / denom, 0)
+    text_fit <- if (sum(sims) > 0) sum(sims * train_ratings) / sum(sims) else mean(train_ratings)
     
     # Numeric score fitting
-    score     <- info$user_score
-    num_fit   <- if (!is.na(score)) {
-      f <- 3 - 2*(score/10); pmin(pmax(f,1),3)
+    score   <- info$user_score
+    num_fit <- if (!is.na(score)) {
+      f <- 3 - 2 * (score/10)
+      pmin(pmax(f,1),3)
     } else mean(train_ratings)
     
     # Recommendation fitting
-    recs      <- info$rec_scores
-    rec_fit   <- if (any(!is.na(recs))) {
-      f <- 3 - 2*(recs/10); mean(f, na.rm=TRUE)
+    recs    <- info$rec_scores
+    rec_fit <- if (any(!is.na(recs))) {
+      f <- 3 - 2 * (recs/10)
+      mean(f, na.rm=TRUE)
     } else mean(train_ratings)
     
-    # Genre Jaccard
+    # Genre Jaccard similarity
     train_genres <- lapply(train_info, `[[`, "genres")
     new_g        <- info$genres
     jacc         <- sapply(train_genres, function(g) {
-      u <- unique(c(g,new_g)); if (length(u)==0) 0 else length(intersect(g,new_g))/length(u)
+      u <- unique(c(g, new_g))
+      if (length(u) == 0) return(0)
+      length(intersect(g, new_g)) / length(u)
     })
-    gen_fit <- if (sum(jacc)>0) sum(jacc * train_ratings)/sum(jacc) else mean(train_ratings)
+    gen_fit <- if (sum(jacc) > 0) sum(jacc * train_ratings) / sum(jacc) else mean(train_ratings)
     
     # Blend weights
-    ws   <- c(input$w_text, input$w_score, input$w_rec, input$w_gen)
-    if (sum(ws)==0) ws <- rep(1,4)
-    pred <- (ws[1]*text_fit + ws[2]*num_fit + ws[3]*rec_fit + ws[4]*gen_fit)/sum(ws)
+    ws <- c(input$w_text, input$w_score, input$w_rec, input$w_gen)
+    if (sum(ws) == 0) ws <- rep(1, 4)
+    pred <- (ws[1] * text_fit + ws[2] * num_fit + ws[3] * rec_fit + ws[4] * gen_fit) / sum(ws)
     
-    data.frame(title=input$movie, predicted_fit=round(pred,2), stringsAsFactors=FALSE)
+    data.frame(title = input$movie,
+               predicted_fit = round(pred, 2),
+               stringsAsFactors = FALSE)
   })
 }
 
