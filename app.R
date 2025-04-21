@@ -21,9 +21,11 @@ train_titles  <- c(
   "Magic Mike",
   "9360-anaconda",
   "König der Herzen",
-  "Titanic"
+  "Ghost Rider",
+  "Titanic",
+  "Pulp Fiction"
 )
-train_ratings <- c(1, 3, 2, 3, 3, 2, 2, 3)
+train_ratings <- c(1, 3, 2, 3, 3, 2, 2, 1, 3, 3)
 
 # 3) Fetch features for one movie
 get_info <- function(title, api_key) {
@@ -114,18 +116,21 @@ server <- function(input, output) {
     it_new  <- itoken(txt_new, tolower, word_tokenizer, progressbar=FALSE)
     dtm_new <- create_dtm(it_new, vectorizer)
     # full 1 x vocab_size matrix
-    x_new_mat <- tfidf_model$transform(dtm_new)
-    if (is.null(dim(x_new_mat))) {
-      x_new_mat <- matrix(x_new_mat, nrow = 1)
-    }
-    # ensure training matrix is base matrix
-    X_base <- as.matrix(X_text_train)
-    # numerator: (7 x M) %*% (M x 1) => 7 x 1
-    numer <- X_base %*% t(x_new_mat)
-    new_norm <- sqrt(sum(x_new_mat^2))
-    denom    <- train_norms * new_norm
+    # ————————————
+    #  a) Embed the new text and coerce to a base matrix
+    x_new_sparse <- tfidf_model$transform(dtm_new)
+    # force it into a standard dense matrix (1 x M)
+    x_new_mat    <- as.matrix(x_new_sparse)
+    
+    #  b) Now do the cosine‐similarity safely
+    X_base   <- as.matrix(X_text_train)   # your 7×M training matrix
+    numer    <- X_base %*% t(x_new_mat)   # 7×M %*% M×1 → 7×1
+    new_norm <- sqrt(sum(x_new_mat^2))    # L2 norm of new row
+    denom    <- train_norms * new_norm    # vector length 7
     sims     <- ifelse(denom > 0, numer[,1] / denom, 0)
     text_fit <- if (sum(sims) > 0) sum(sims * train_ratings) / sum(sims) else mean(train_ratings)
+    # ————————————
+    
     
     # Numeric score fitting
     score   <- info$user_score
